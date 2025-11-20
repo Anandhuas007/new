@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Neon Shift — Menu</title>
 
-    <!-- Clean Japanese-style font -->
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;600&display=swap" rel="stylesheet">
 
     <style>
@@ -16,7 +15,6 @@
             font-family: "Noto Sans JP", sans-serif;
         }
 
-        /* MAIN OVERLAY */
         #menuOverlay {
             position: absolute;
             inset: 0;
@@ -30,7 +28,6 @@
             transition: opacity 0.6s ease, backdrop-filter 0.6s ease;
         }
 
-        /* TITLE */
         #title {
             font-size: 100px;
             color: white;
@@ -39,7 +36,6 @@
             text-shadow: 0 0 15px rgba(255,255,255,0.7), 0 0 40px rgba(255,255,255,0.5);
         }
 
-        /* MENU ITEMS */
         .menu-item {
             font-size: 30px;
             color: white;
@@ -48,40 +44,18 @@
             transition: 0.2s;
         }
 
-        /* [TEXT] -> <TEXT> hover effect */
-        .menu-item[data-state="bracket"]::before {
-            content: "[";
-        }
-        .menu-item[data-state="bracket"]::after {
-            content: "]";
-        }
-        .menu-item:hover[data-state="bracket"]::before {
-            content: "<";
-        }
-        .menu-item:hover[data-state="bracket"]::after {
-            content: ">";
-        }
+        .menu-item[data-state="bracket"]::before { content: "["; }
+        .menu-item[data-state="bracket"]::after { content: "]"; }
+        .menu-item:hover[data-state="bracket"]::before { content: "<"; }
+        .menu-item:hover[data-state="bracket"]::after { content: ">"; }
 
-        /* MASCOT */
-        #mascotCanvas {
-            position: absolute;
-            bottom: 40px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 150px;
-            height: 150px;
-            z-index: 25;
-            pointer-events: none;
-        }
     </style>
 </head>
 
 <body>
 
-    <!-- Placeholder where game canvas will go once merged -->
     <canvas id="gameCanvas"></canvas>
 
-    <!-- MENU OVERLAY -->
     <div id="menuOverlay">
         <div id="title">NEON SHIFT</div>
         <div class="menu-item" id="playBtn" data-state="bracket">PLAY</div>
@@ -90,70 +64,8 @@
         <div class="menu-item" id="exitBtn" data-state="bracket">EXIT</div>
     </div>
 
-    <!-- MASCOT CHARACTER -->
-    <canvas id="mascotCanvas"></canvas>
-
     <script>
-        /* ----------------- MASCOT LOGIC ------------------ */
-
-        const mCanvas = document.getElementById("mascotCanvas");
-        const mctx = mCanvas.getContext("2d");
-
-        const blockSize = 150;
-        const eyeOffsetY = 45;
-        const eyeOffsetX = 35;
-
-        let eyeX = 0, eyeY = 0;
-        let targetEyeX = 0, targetEyeY = 0;
-
-        function animateEyes() {
-            eyeX += (targetEyeX - eyeX) * 0.1;
-            eyeY += (targetEyeY - eyeY) * 0.1;
-            requestAnimationFrame(animateEyes);
-        }
-        animateEyes();
-
-        function drawMascot() {
-            mctx.clearRect(0, 0, mCanvas.width, mCanvas.height);
-
-            // Body (dark block)
-            mctx.shadowBlur = 20;
-            mctx.shadowColor = "rgba(255,255,255,0.15)";
-            mctx.fillStyle = "#141414";
-            mctx.beginPath();
-            mctx.roundRect(0, 0, blockSize, blockSize, 28);
-            mctx.fill();
-
-            // Eyes
-            mctx.fillStyle = "#ffffff";
-            mctx.shadowColor = "#ffffff";
-            mctx.shadowBlur = 12;
-
-            mctx.beginPath();
-            mctx.arc(blockSize/2 - eyeOffsetX + eyeX, blockSize/2 - eyeOffsetY + eyeY, 8, 0, Math.PI*2);
-            mctx.fill();
-
-            mctx.beginPath();
-            mctx.arc(blockSize/2 + eyeOffsetX + eyeX, blockSize/2 - eyeOffsetY + eyeY, 8, 0, Math.PI*2);
-            mctx.fill();
-
-            requestAnimationFrame(drawMascot);
-        }
-        drawMascot();
-
-        /* Make eyes track PLAY */
-        const playBtn = document.getElementById("playBtn");
-
-        playBtn.addEventListener("mousemove", () => {
-            targetEyeX = 15;
-            targetEyeY = 0;
-        });
-
-        playBtn.addEventListener("mouseleave", () => {
-            targetEyeX = 0;
-            targetEyeY = 0;
-        });
-
+        // placeholder events
     </script>
 
 </body>
