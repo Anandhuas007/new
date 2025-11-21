@@ -1,89 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Neon Shift Merged</title>
-<style>
-body {
-    margin: 0;
-    overflow: hidden;
-    background-color: #000;
-    font-family: "Noto Sans JP", sans-serif;
-}
-
-#worldCanvas {
-    position: absolute;
-    inset: 0;
-    width: 100vw;
-    height: 100vh;
-    z-index: 0;
-}
-
-#uiCanvas {
-    position: absolute;
-    inset: 0;
-    width: 100vw;
-    height: 100vh;
-    z-index: 1;
-    pointer-events: none;
-}
-
-#menuOverlay {
-    position: absolute;
-    inset: 0;
-    background: rgba(0,0,0,0.6);
-    backdrop-filter: grayscale(100%) blur(2px);
-    z-index: 10;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    padding-left: 150px;
-    transition: opacity 0.6s ease, backdrop-filter 0.6s ease;
-}
-
-#title {
-    font-size: 100px;
-    color: white;
-    font-weight: 600;
-    margin-bottom: 60px;
-    text-shadow: 0 0 20px rgba(255,255,255,0.8), 0 0 40px rgba(255,255,255,0.5);
-}
-
-.menu-item {
-    font-size: 30px;
-    color: white;
-    margin: 12px 0;
-    cursor: pointer;
-    transition: 0.2s;
-}
-</style>
-</head>
-
-<body>
-<canvas id="worldCanvas"></canvas>
-<canvas id="uiCanvas"></canvas>
-
-<div id="menuOverlay">
-    <div id="title">NEON SHIFT</div>
-    <div class="menu-item" id="playBtn">PLAY</div>
-</div>
-
-<script>
-let paused = true;
-const playBtn = document.getElementById("playBtn");
-const menuOverlay = document.getElementById("menuOverlay");
-
-playBtn.addEventListener("click", () => {
-    paused = false;
-    menuOverlay.style.opacity = 0;
-    setTimeout(() => menuOverlay.style.display = "none", 600);
-});
-</script>
-
-<!-- ================= ORIGINAL GAME CODE BELOW ================ -->
-<!DOCTYPE html>
-<html lang="en">
-<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Neon Puzzle Platformer</title>
@@ -145,7 +62,7 @@ playBtn.addEventListener("click", () => {
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
-
+        
         // --- THEME DEFINITIONS ---
         const THEME_COLORS = [
             // Theme 1: Cyan/Orange (Default)
@@ -223,7 +140,7 @@ playBtn.addEventListener("click", () => {
         let particles = [];
         let spawnedCollectible = null; // Reference to the single ball spawned in the current level
         let carriedJumpBallCount = 0; // State carried between levels
-
+        let gameState = 'playing'; // Added game state management
         
         const keys = {
             a: false,
@@ -239,6 +156,7 @@ playBtn.addEventListener("click", () => {
             down: false,
             draggedBlock: null
         };
+
 
         // --- CLASSES ---
 
@@ -363,17 +281,27 @@ playBtn.addEventListener("click", () => {
                 super(x, y, 40, 40, CONFIG.colors.player);
                 this.jumps = 0;
                 this.maxJumps = 2; // Allows ground jump + one aerial jump attempt
-                this.jumpBallCount = 0; // NEW: Inventory count
-                this.maxJumpBalls = 5; // NEW: Max capacity
+                this.jumpBallCount = 0; // Inventory count
+                this.maxJumpBalls = 5; // Max capacity
+                this.rotation = 0; // Player rotation
+                this.isJumping = false; // Track jumping state for rotation
             }
             
-            // Custom draw to handle variable glow
+            // Custom draw to handle variable glow and rotation
             draw() {
                 // Determine glow intensity based on jump balls (0 to 5, mapping to blur 10 to 40)
                 const glowIntensity = 10 + (this.jumpBallCount * 6); 
                 
                 // Determine line thickness (2px base + 0.8px per ball, max 6px)
                 const lineThickness = 2 + (this.jumpBallCount * 0.8);
+
+                // Save canvas state before rotation
+                ctx.save();
+                
+                // Translate to center of player, rotate, then translate back
+                ctx.translate(this.x + this.w / 2, this.y + this.h / 2);
+                ctx.rotate(this.rotation);
+                ctx.translate(-(this.x + this.w / 2), -(this.y + this.h / 2));
 
                 // Use the theme color (this.color is set by applyTheme)
                 ctx.fillStyle = this.color;
@@ -386,9 +314,16 @@ playBtn.addEventListener("click", () => {
                 ctx.lineWidth = lineThickness; // Use calculated thickness
                 ctx.strokeRect(this.x, this.y, this.w, this.h);
                 ctx.shadowBlur = 0;
+
+                // Restore canvas state
+                ctx.restore();
             }
 
-            update(blocks) {
+            // Updated to accept specter for collision check
+            update(blocks, specter) {
+                // Only process movement/physics if the game is playing
+                if (gameState !== 'playing') return;
+
                 // Horizontal Movement - Fixed speed impulse
                 if (keys.a) this.vx -= CONFIG.playerSpeed;
                 if (keys.d) this.vx += CONFIG.playerSpeed;
@@ -409,6 +344,14 @@ playBtn.addEventListener("click", () => {
                 if(this.x < 0) this.x = 0;
                 if(this.x + this.w > worldWidth) this.x = worldWidth - this.w;
 
+                // --- Rotation Logic ---
+                if (this.isJumping) {
+                    this.rotation += 0.2; // Rotate while in air
+                } else {
+                    this.rotation = 0; // Reset rotation on ground
+                }
+
+
                 // --- CHECK FOR COLLECTIBLE ---
                 if (spawnedCollectible && checkRectCollide(this, spawnedCollectible)) {
                     if (this.jumpBallCount < this.maxJumpBalls) {
@@ -421,6 +364,8 @@ playBtn.addEventListener("click", () => {
 
                 // --- VOID/DEATH CHECK ---
                 let isDead = false;
+                
+                // 1. Check VoidZones
                 for(let block of blocks) {
                     if (block instanceof VoidZone && checkRectCollide(this, block)) {
                         createExplosion(this.x, this.y, '#ff0000', 30);
@@ -429,22 +374,37 @@ playBtn.addEventListener("click", () => {
                     }
                 }
                 
-                // Death (Fall below screen) - Fallback for massive geometry errors
+                // 2. Check Specter Collision (FIX: Re-added this critical check)
+                if (specter && checkRectCollide(this, specter)) {
+                    createExplosion(this.x, this.y, CONFIG.colors.specter, 30);
+                    isDead = true;
+                }
+
+                // 3. Death (Fall below screen) - Fallback for massive geometry errors
                 if(this.y > screenHeight + 100) { 
                     createExplosion(this.x, this.y, this.color);
                     isDead = true;
                 }
 
                 if (isDead) {
-                    resetLevel();
+                    if (gameState === 'playing') {
+                        gameState = 'dead'; // Block further movement and show message
+                        // Immediately reset the level after a short delay for explosion/message to be seen
+                        setTimeout(() => {
+                            resetLevel();
+                        }, 300); // Changed from 500ms to 300ms
+                    }
                     return; // Stop update loop immediately
                 }
             }
 
             jump() {
+                if (gameState !== 'playing') return; // Cannot jump if dead
+                
                 if (this.grounded) {
                     this.vy = -CONFIG.playerJump;
                     this.jumps = 1;
+                    this.isJumping = true; // Start rotation
                     createExplosion(this.x + this.w/2, this.y + this.h, '#fff', 5);
                 } 
                 // Double jump consumes a ball charge (and ensures player hasn't already double-jumped)
@@ -453,6 +413,7 @@ playBtn.addEventListener("click", () => {
                     this.jumps++;
                     this.jumpBallCount--; // Consume charge
                     updateUI();
+                    this.isJumping = true; // Keep rotation going
                     createExplosion(this.x + this.w/2, this.y + this.h, CONFIG.colors.player, 5);
                 }
             }
@@ -475,6 +436,7 @@ playBtn.addEventListener("click", () => {
                                 this.y = block.y - this.h;
                                 this.grounded = true;
                                 this.jumps = 0;
+                                this.isJumping = false; // Reset rotation state
                             } else if (this.vy < 0) { // Hitting head
                                 this.y = block.y + block.h;
                             }
@@ -504,6 +466,8 @@ playBtn.addEventListener("click", () => {
             }
 
             update() {
+                if (gameState !== 'playing') return; // Only move when playing
+                
                 // Random horizontal movement
                 this.vx = this.speed * this.direction;
                 this.x += this.vx;
@@ -549,7 +513,7 @@ playBtn.addEventListener("click", () => {
             }
 
             update(otherBlocks) {
-                if (this.type === 'static') return;
+                if (this.type === 'static' && gameState === 'playing') return; // Static blocks only updated for dragging logic
 
                 if (this.isDragging) {
                     // Use worldX for dragging since we have a camera now
@@ -561,6 +525,8 @@ playBtn.addEventListener("click", () => {
                     this.vy = 0;
                     return;
                 }
+                
+                if (this.type === 'static' || gameState !== 'playing') return; // Stop movable blocks if not playing
 
                 // Gravity for movable blocks
                 this.vy += CONFIG.gravity;
@@ -736,6 +702,7 @@ playBtn.addEventListener("click", () => {
         function resetLevel() {
             carriedJumpBallCount = 0; // Loss all balls on death
             generateLevel(level);
+            gameState = 'playing'; // Revert state back to playing after generating level
         }
 
         // Completes the current challenge and loads a new challenge at the SAME level difficulty (used on gate entry)
@@ -750,10 +717,12 @@ playBtn.addEventListener("click", () => {
         // --- INPUT LISTENERS ---
 
         window.addEventListener('keydown', e => {
+            if (gameState !== 'playing') return; // Ignore input if not playing
+
             if (e.key === 'a' || e.key === 'A') keys.a = true;
             if (e.key === 'd' || e.key === 'D') keys.d = true;
             if (e.key === ' ') {
-                if (!keys.spacePressed) {
+                if (!keys.spacePressed) { 
                     player.jump();
                     keys.spacePressed = true;
                 }
@@ -771,6 +740,8 @@ playBtn.addEventListener("click", () => {
         });
 
         canvas.addEventListener('mousedown', e => {
+            if (gameState !== 'playing') return;
+            
             mouse.down = true;
             mouse.x = e.clientX;
             mouse.y = e.clientY;
@@ -806,7 +777,7 @@ playBtn.addEventListener("click", () => {
         // --- MAIN LOOP ---
 
         function loop() {
-            // Camera Logic
+            // Camera Logic (Always smooth the camera, even when dead, to follow the death location)
             let targetCamX = player.x - screenWidth / 2 + player.w / 2;
             targetCamX = Math.max(0, Math.min(targetCamX, worldWidth - screenWidth));
             cameraX += (targetCamX - cameraX) * 0.1;
@@ -819,16 +790,10 @@ playBtn.addEventListener("click", () => {
             ctx.translate(-cameraX, 0);
 
             // --- DRAW WORLD ---
-
             startGate.draw();
             endGate.draw();
 
-            // Check if player is INSIDE the gate -> Complete current challenge
-            if (checkRectCollide(player, endGate)) {
-                completeLevel();
-            }
-
-            // Particles
+            // Particles (Always update and draw for explosion effect)
             for(let i=particles.length-1; i>=0; i--) {
                 let p = particles[i];
                 p.x += p.vx;
@@ -841,44 +806,63 @@ playBtn.addEventListener("click", () => {
                 if(p.life <= 0) particles.splice(i, 1);
             }
 
-            // Collectible
-            if (spawnedCollectible) {
-                spawnedCollectible.update();
-                spawnedCollectible.draw();
+            // --- UPDATES AND ACTIVE DRAWING ONLY WHEN PLAYING ---
+            if (gameState === 'playing') {
+                 // Check if player is INSIDE the gate -> Complete current challenge
+                if (checkRectCollide(player, endGate)) {
+                    completeLevel();
+                }
+
+                // Collectible
+                if (spawnedCollectible) {
+                    spawnedCollectible.update();
+                    spawnedCollectible.draw();
+                }
+
+                // Blocks (including VoidZones)
+                blocks.forEach(b => {
+                    b.update(blocks);
+                    b.draw();
+                });
+
+                // Specter update and draw
+                specter.update();
+                specter.draw();
+
+                // Player update and draw
+                // The player update now includes the specter collision check
+                player.update(blocks, specter);
+                player.draw();
+            } else {
+                 // DRAW STATE: Briefly show the blocks and specter while the game is resetting
+                blocks.forEach(b => b.draw());
+                specter.draw();
             }
 
-            // Blocks (including VoidZones)
-            blocks.forEach(b => {
-                b.update(blocks);
-                b.draw();
-            });
+            ctx.restore(); // Close the translation/camera block
 
-            // Specter update and draw
-            specter.update();
-            specter.draw();
-
-            // Check collision between player and specter
-            if (checkRectCollide(player, specter)) {
-                createExplosion(player.x, player.y, CONFIG.colors.specter, 40);
-                resetLevel(); // Player dies if touched by specter
+            // --- DRAW DEATH MESSAGE (NOT AFFECTED BY CAMERA) ---
+            if (gameState === 'dead') {
+                ctx.fillStyle = '#ff0000';
+                ctx.shadowColor = '#ff0000';
+                ctx.shadowBlur = 30;
+                ctx.font = 'bold 60px "Courier New", Courier, monospace';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                // Flashing effect for the text
+                const alpha = 0.5 + Math.abs(Math.sin(Date.now() * 0.01)) * 0.5; 
+                ctx.globalAlpha = alpha;
+                ctx.fillText("SHIFT FAILED", screenWidth / 2, screenHeight / 2);
+                ctx.globalAlpha = 1;
+                ctx.shadowBlur = 0;
             }
 
-
-            // Player
-            player.update(blocks);
-            player.draw(); // Now handles glow and line thickness based on inventory
-
-            ctx.restore();
             requestAnimationFrame(loop);
         }
 
+        // --- INITIALIZATION ---
         generateLevel(level);
-        loop();
-
+        requestAnimationFrame(loop);
     </script>
-</body>
-</html>
-
-
 </body>
 </html>
