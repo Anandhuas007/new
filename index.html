@@ -1,72 +1,884 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<meta charset="UTF-8">
+<title>Neon Shift Merged</title>
+<style>
+body {
+    margin: 0;
+    overflow: hidden;
+    background-color: #000;
+    font-family: "Noto Sans JP", sans-serif;
+}
+
+#worldCanvas {
+    position: absolute;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 0;
+}
+
+#uiCanvas {
+    position: absolute;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 1;
+    pointer-events: none;
+}
+
+#menuOverlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: grayscale(100%) blur(2px);
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding-left: 150px;
+    transition: opacity 0.6s ease, backdrop-filter 0.6s ease;
+}
+
+#title {
+    font-size: 100px;
+    color: white;
+    font-weight: 600;
+    margin-bottom: 60px;
+    text-shadow: 0 0 20px rgba(255,255,255,0.8), 0 0 40px rgba(255,255,255,0.5);
+}
+
+.menu-item {
+    font-size: 30px;
+    color: white;
+    margin: 12px 0;
+    cursor: pointer;
+    transition: 0.2s;
+}
+</style>
+</head>
+
+<body>
+<canvas id="worldCanvas"></canvas>
+<canvas id="uiCanvas"></canvas>
+
+<div id="menuOverlay">
+    <div id="title">NEON SHIFT</div>
+    <div class="menu-item" id="playBtn">PLAY</div>
+</div>
+
+<script>
+let paused = true;
+const playBtn = document.getElementById("playBtn");
+const menuOverlay = document.getElementById("menuOverlay");
+
+playBtn.addEventListener("click", () => {
+    paused = false;
+    menuOverlay.style.opacity = 0;
+    setTimeout(() => menuOverlay.style.display = "none", 600);
+});
+</script>
+
+<!-- ================= ORIGINAL GAME CODE BELOW ================ -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Neon Shift — Menu</title>
-
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;600&display=swap" rel="stylesheet">
-
+    <title>Neon Puzzle Platformer</title>
     <style>
         body {
             margin: 0;
             overflow: hidden;
-            background: #000;
-            font-family: "Noto Sans JP", sans-serif;
+            background-color: #111;
+            font-family: 'Courier New', Courier, monospace;
+            user-select: none;
         }
-
-        #menuOverlay {
+        #gameCanvas {
+            display: block;
+        }
+        #ui {
             position: absolute;
-            inset: 0;
-            background: rgba(0, 0, 0, 0.6);
-            backdrop-filter: grayscale(100%) blur(2px);
-            z-index: 20;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            padding-left: 150px;
-            transition: opacity 0.6s ease, backdrop-filter 0.6s ease;
+            top: 20px;
+            left: 20px;
+            pointer-events: none;
+            z-index: 10;
         }
-
-        #title {
-            font-size: 100px;
-            color: white;
-            font-weight: 600;
-            margin-bottom: 60px;
-            text-shadow: 0 0 15px rgba(255,255,255,0.7), 0 0 40px rgba(255,255,255,0.5);
+        h1 {
+            margin: 0;
+            font-size: 24px;
         }
-
-        .menu-item {
+        p {
+            margin: 5px 0;
+            font-size: 14px;
+            color: #aaa;
+        }
+        #jump-ball-count {
+            color: #ffffaa; 
+            text-shadow: 0 0 5px #ffffaa; 
+            font-weight: bold;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+        #level-indicator {
+            position: absolute;
+            top: 20px;
+            right: 20px;
             font-size: 30px;
-            color: white;
-            margin: 12px 0;
-            cursor: pointer;
-            transition: 0.2s;
+            font-weight: bold;
+            z-index: 10;
         }
-
-        .menu-item[data-state="bracket"]::before { content: "["; }
-        .menu-item[data-state="bracket"]::after { content: "]"; }
-        .menu-item:hover[data-state="bracket"]::before { content: "<"; }
-        .menu-item:hover[data-state="bracket"]::after { content: ">"; }
-
     </style>
 </head>
-
 <body>
 
+    <div id="ui">
+        <h1>NEON SHIFT</h1>
+        <p id="controls-info">[A/D] Move &nbsp; [SPACE] Jump</p>
+        <p id="jump-ball-count">JUMPS: 0/5</p>
+        <p>[MOUSE] Drag Orange Blocks</p>
+    </div>
+    <div id="level-indicator">LEVEL 1</div>
     <canvas id="gameCanvas"></canvas>
 
-    <div id="menuOverlay">
-        <div id="title">NEON SHIFT</div>
-        <div class="menu-item" id="playBtn" data-state="bracket">PLAY</div>
-        <div class="menu-item" data-state="bracket">SETTINGS</div>
-        <div class="menu-item" data-state="bracket">CREDITS</div>
-        <div class="menu-item" id="exitBtn" data-state="bracket">EXIT</div>
-    </div>
-
     <script>
-        // placeholder events
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // --- THEME DEFINITIONS ---
+        const THEME_COLORS = [
+            // Theme 1: Cyan/Orange (Default)
+            { player: '#00ffcc', gate: '#0088ff', portal: '#00ff00', levelIndicator: '#ff0055', movable: '#ff8800' },
+            // Theme 2: Magenta/Yellow
+            { player: '#ff00ff', gate: '#aa00ff', portal: '#ffff00', levelIndicator: '#00ff00', movable: '#00ffff' },
+            // Theme 3: Yellow/Blue
+            { player: '#ffff00', gate: '#33ccff', portal: '#ff00ff', levelIndicator: '#ff8800', movable: '#00ffcc' },
+            // Theme 4: Green/Red
+            { player: '#00ff00', gate: '#55ff55', portal: '#ff5500', levelIndicator: '#ff00ff', movable: '#ffff00' },
+        ];
+
+
+        // --- CONFIGURATION ---
+        const CONFIG = {
+            gravity: 0.6,
+            friction: 0.8,
+            playerSpeed: 1.0, 
+            playerJump: 12,
+            blockSize: 50,
+            worldMultiplier: 2.5, // Map is 2.5x screen width
+            colors: {
+                // Base colors (These will be updated by applyTheme)
+                player: '#00ffcc', 
+                blockMovable: '#ff8800',
+                portal: '#00ff00',
+                gate: '#0088ff',
+                // Constant colors
+                blockStatic: '#444',
+                void: '#550000', 
+                bg: '#111',
+                specter: '#ff0000',
+                collectible: '#ffffaa' // New collectible color
+            }
+        };
+
+        let screenWidth, screenHeight;
+        let worldWidth;
+        let cameraX = 0;
+        
+        function resize() {
+            screenWidth = canvas.width = window.innerWidth;
+            screenHeight = canvas.height = window.innerHeight;
+            worldWidth = screenWidth * CONFIG.worldMultiplier;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // --- THEME LOGIC ---
+
+        function applyTheme(lvl) {
+            const themeIndex = (lvl - 1) % THEME_COLORS.length;
+            const theme = THEME_COLORS[themeIndex];
+            
+            // Update CONFIG colors used by entity constructors
+            CONFIG.colors.player = theme.player;
+            CONFIG.colors.gate = theme.gate;
+            CONFIG.colors.portal = theme.portal;
+            CONFIG.colors.blockMovable = theme.movable;
+            
+            // Update UI element styles for the current theme
+            const uiElement = document.getElementById('ui');
+            const levelIndicatorElement = document.getElementById('level-indicator');
+
+            uiElement.style.color = theme.player;
+            uiElement.querySelector('h1').style.textShadow = `0 0 10px ${theme.player}`;
+            
+            levelIndicatorElement.style.color = theme.levelIndicator;
+            levelIndicatorElement.style.textShadow = `0 0 10px ${theme.levelIndicator}`;
+        }
+
+
+        // --- GAME STATE ---
+        let level = 1; 
+        let particles = [];
+        let spawnedCollectible = null; // Reference to the single ball spawned in the current level
+        let carriedJumpBallCount = 0; // State carried between levels
+
+        
+        const keys = {
+            a: false,
+            d: false,
+            space: false,
+            spacePressed: false
+        };
+
+        const mouse = {
+            x: 0,
+            y: 0,
+            worldX: 0, // Mouse X relative to world
+            down: false,
+            draggedBlock: null
+        };
+
+        // --- CLASSES ---
+
+        class Entity {
+            constructor(x, y, w, h, color) {
+                this.x = x;
+                this.y = y;
+                this.w = w;
+                this.h = h;
+                this.vx = 0;
+                this.vy = 0;
+                this.color = color;
+                this.grounded = false;
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.w, this.h);
+                
+                // Base Neon Glow (will be overridden by Player)
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = this.color;
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(this.x, this.y, this.w, this.h);
+                ctx.shadowBlur = 0;
+            }
+
+            update() {
+                // Apply Gravity
+                this.vy += CONFIG.gravity;
+                this.y += this.vy;
+                this.x += this.vx;
+            }
+        }
+
+        class Collectible extends Entity {
+            constructor(x, y) {
+                super(x, y, 15, 15, CONFIG.colors.collectible);
+            }
+
+            draw() {
+                // Draw a circle for the ball
+                ctx.shadowBlur = 25;
+                ctx.shadowColor = this.color;
+                ctx.fillStyle = this.color;
+                
+                ctx.beginPath();
+                ctx.arc(this.x + this.w/2, this.y + this.h/2, this.w/2, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Add a small inner glow for flair
+                ctx.shadowBlur = 5;
+                ctx.shadowColor = '#fff';
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(this.x + this.w/2, this.y + this.h/2, this.w/4, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.shadowBlur = 0;
+            }
+            update() { 
+                // Slight vertical bobbing animation
+                this.y += Math.sin(Date.now() * 0.005) * 0.5;
+            }
+        }
+
+        class Gate extends Entity { 
+            constructor(x, y, isExit) {
+                // Use the updated CONFIG colors
+                super(x, y, 80, 120, isExit ? CONFIG.colors.portal : CONFIG.colors.gate);
+                this.isExit = isExit;
+            }
+
+            draw() {
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = this.color;
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = 4;
+
+                // Left Pillar
+                ctx.strokeRect(this.x, this.y, 10, this.h);
+                // Right Pillar
+                ctx.strokeRect(this.x + this.w - 10, this.y, 10, this.h);
+                // Top Bar
+                ctx.strokeRect(this.x, this.y, this.w, 10);
+
+                // Inner Portal Effect (Only for exit)
+                if (this.isExit) {
+                    ctx.fillStyle = this.color;
+                    ctx.globalAlpha = 0.3 + Math.sin(Date.now() * 0.005) * 0.1;
+                    ctx.fillRect(this.x + 10, this.y + 10, this.w - 20, this.h);
+                    ctx.globalAlpha = 1;
+                }
+                ctx.shadowBlur = 0;
+            }
+            update() { /* No physics needed */ } 
+        }
+        
+        class VoidZone extends Entity {
+            constructor(x, y, w, h) {
+                super(x, y, w, h, CONFIG.colors.void); 
+            }
+            draw() {
+                // Draw a subtle red glow / warning border
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.w, this.h);
+                
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#ff0000';
+                ctx.strokeStyle = '#ff0000';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(this.x, this.y, this.w, this.h);
+                ctx.shadowBlur = 0;
+            }
+            update() { /* No physics needed */ } 
+        }
+
+        class Player extends Entity {
+            constructor(x, y) {
+                // Use the updated CONFIG colors
+                super(x, y, 40, 40, CONFIG.colors.player);
+                this.jumps = 0;
+                this.maxJumps = 2; // Allows ground jump + one aerial jump attempt
+                this.jumpBallCount = 0; // NEW: Inventory count
+                this.maxJumpBalls = 5; // NEW: Max capacity
+            }
+            
+            // Custom draw to handle variable glow
+            draw() {
+                // Determine glow intensity based on jump balls (0 to 5, mapping to blur 10 to 40)
+                const glowIntensity = 10 + (this.jumpBallCount * 6); 
+                
+                // Determine line thickness (2px base + 0.8px per ball, max 6px)
+                const lineThickness = 2 + (this.jumpBallCount * 0.8);
+
+                // Use the theme color (this.color is set by applyTheme)
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.w, this.h);
+                
+                // Enhanced Neon Glow and Thickness
+                ctx.shadowBlur = glowIntensity;
+                ctx.shadowColor = this.color;
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = lineThickness; // Use calculated thickness
+                ctx.strokeRect(this.x, this.y, this.w, this.h);
+                ctx.shadowBlur = 0;
+            }
+
+            update(blocks) {
+                // Horizontal Movement - Fixed speed impulse
+                if (keys.a) this.vx -= CONFIG.playerSpeed;
+                if (keys.d) this.vx += CONFIG.playerSpeed;
+                
+                this.vx *= CONFIG.friction;
+
+                // Physics Step X
+                this.x += this.vx;
+                this.checkCollisions(blocks, 'x');
+
+                // Physics Step Y
+                this.vy += CONFIG.gravity;
+                this.y += this.vy;
+                this.grounded = false;
+                this.checkCollisions(blocks, 'y');
+
+                // World Boundaries
+                if(this.x < 0) this.x = 0;
+                if(this.x + this.w > worldWidth) this.x = worldWidth - this.w;
+
+                // --- CHECK FOR COLLECTIBLE ---
+                if (spawnedCollectible && checkRectCollide(this, spawnedCollectible)) {
+                    if (this.jumpBallCount < this.maxJumpBalls) {
+                        this.jumpBallCount++; // Increment count
+                        createExplosion(spawnedCollectible.x, spawnedCollectible.y, CONFIG.colors.collectible, 15);
+                        spawnedCollectible = null; // Remove from play
+                        updateUI();
+                    }
+                }
+
+                // --- VOID/DEATH CHECK ---
+                let isDead = false;
+                for(let block of blocks) {
+                    if (block instanceof VoidZone && checkRectCollide(this, block)) {
+                        createExplosion(this.x, this.y, '#ff0000', 30);
+                        isDead = true;
+                        break;
+                    }
+                }
+                
+                // Death (Fall below screen) - Fallback for massive geometry errors
+                if(this.y > screenHeight + 100) { 
+                    createExplosion(this.x, this.y, this.color);
+                    isDead = true;
+                }
+
+                if (isDead) {
+                    resetLevel();
+                    return; // Stop update loop immediately
+                }
+            }
+
+            jump() {
+                if (this.grounded) {
+                    this.vy = -CONFIG.playerJump;
+                    this.jumps = 1;
+                    createExplosion(this.x + this.w/2, this.y + this.h, '#fff', 5);
+                } 
+                // Double jump consumes a ball charge (and ensures player hasn't already double-jumped)
+                else if (this.jumps < this.maxJumps && this.jumpBallCount > 0) { 
+                    this.vy = -CONFIG.playerJump * 0.9;
+                    this.jumps++;
+                    this.jumpBallCount--; // Consume charge
+                    updateUI();
+                    createExplosion(this.x + this.w/2, this.y + this.h, CONFIG.colors.player, 5);
+                }
+            }
+
+            checkCollisions(blocks, axis) {
+                for (let block of blocks) {
+                    // Only check against solid blocks (not VoidZones)
+                    if (block instanceof VoidZone) continue;
+                    
+                    // Skip collision check if the block is currently being dragged
+                    if (block.isDragging) continue;
+
+                    if (checkRectCollide(this, block)) {
+                        if (axis === 'x') {
+                            if (this.vx > 0) this.x = block.x - this.w;
+                            else if (this.vx < 0) this.x = block.x + block.w;
+                            this.vx = 0;
+                        } else {
+                            if (this.vy > 0) { // Falling onto block
+                                this.y = block.y - this.h;
+                                this.grounded = true;
+                                this.jumps = 0;
+                            } else if (this.vy < 0) { // Hitting head
+                                this.y = block.y + block.h;
+                            }
+                            this.vy = 0;
+                        }
+                    }
+                }
+            }
+        }
+
+        class Specter extends Entity {
+            constructor(x, y) {
+                super(x, y, 20, 20, CONFIG.colors.specter); // Smaller and red
+                this.speed = 2; // Random movement speed
+                this.direction = Math.random() < 0.5 ? 1 : -1; // -1 for left, 1 for right
+                this.wanderTimer = 0;
+                this.wanderInterval = 100 + Math.random() * 200; // Change direction every few seconds
+            }
+
+            draw() {
+                // Brighter glow
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = this.color;
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.w, this.h);
+                ctx.shadowBlur = 0;
+            }
+
+            update() {
+                // Random horizontal movement
+                this.vx = this.speed * this.direction;
+                this.x += this.vx;
+
+                this.wanderTimer++;
+                if (this.wanderTimer > this.wanderInterval) {
+                    this.direction *= -1; // Reverse direction
+                    this.wanderTimer = 0;
+                    this.wanderInterval = 100 + Math.random() * 200;
+                }
+
+                // World boundaries for specter
+                if (this.x < 0 || this.x + this.w > worldWidth) {
+                    this.direction *= -1;
+                    this.x = Math.max(0, Math.min(this.x, worldWidth - this.w)); // Clamp position
+                }
+
+                // Specter floats, no gravity or block collision for it
+                // We'll give it a slight vertical bob for movement
+                this.y = screenHeight - 150 + Math.sin(Date.now() * 0.003 + this.x * 0.01) * 30;
+
+                // --- Particle Generation ---
+                if (Math.random() < 0.3) {
+                    particles.push({
+                        x: this.x + this.w / 2, 
+                        y: this.y + this.h / 2,
+                        vx: this.vx * 0.1 + (Math.random() - 0.5) * 0.5, // Particles trail slightly behind
+                        vy: (Math.random() - 0.5) * 1,
+                        life: 0.3, // Short life
+                        color: CONFIG.colors.specter
+                    });
+                }
+            }
+        }
+
+        class Block extends Entity {
+            constructor(x, y, type) {
+                // Use the updated CONFIG colors
+                super(x, y, CONFIG.blockSize, CONFIG.blockSize, 
+                      type === 'movable' ? CONFIG.colors.blockMovable : CONFIG.colors.blockStatic);
+                this.type = type; 
+                this.isDragging = false;
+            }
+
+            update(otherBlocks) {
+                if (this.type === 'static') return;
+
+                if (this.isDragging) {
+                    // Use worldX for dragging since we have a camera now
+                    this.vx = (mouse.worldX - this.w/2 - this.x) * 0.2;
+                    this.vy = (mouse.y - this.h/2 - this.y) * 0.2;
+                    this.x += this.vx;
+                    this.y += this.vy;
+                    this.vx = 0;
+                    this.vy = 0;
+                    return;
+                }
+
+                // Gravity for movable blocks
+                this.vy += CONFIG.gravity;
+                this.y += this.vy;
+
+                this.grounded = false;
+                for (let other of otherBlocks) {
+                    if (other === this || other instanceof VoidZone) continue; // Ignore self and VoidZones
+                    if (checkRectCollide(this, other)) {
+                        if (this.vy > 0 && this.y + this.h < other.y + other.h/2 + this.vy + 10) {
+                            this.y = other.y - this.h;
+                            this.vy = 0;
+                            this.grounded = true;
+                        }
+                    }
+                }
+                
+                this.y = Math.min(this.y, screenHeight - this.h); // Prevent blocks from sinking past bottom of screen
+                if(this.y + this.h >= screenHeight) {
+                    this.y = screenHeight - this.h;
+                    this.vy = 0;
+                    this.grounded = true;
+                }
+                
+                this.vx *= 0.9;
+                this.x += this.vx;
+            }
+        }
+
+        // --- UTILS ---
+
+        function checkRectCollide(r1, r2) {
+            // Note: Since the Collectible is a circle, this approximation is okay for now, 
+            // but for better accuracy, check circle-rect collision here.
+            return r1.x < r2.x + r2.w &&
+                   r1.x + r1.w > r2.x &&
+                   r1.y < r2.y + r2.h &&
+                   r1.y + r1.h > r2.y;
+        }
+
+        function createExplosion(x, y, color, count = 10) {
+            for(let i=0; i<count; i++) {
+                particles.push({
+                    x: x, y: y,
+                    vx: (Math.random() - 0.5) * 10,
+                    vy: (Math.random() - 0.5) * 10,
+                    life: 1.0,
+                    color: color
+                });
+            }
+        }
+
+        // --- UI Update Function ---
+        function updateUI() {
+            if (player) {
+                document.getElementById('jump-ball-count').innerText = 
+                    `JUMPS: ${player.jumpBallCount}/${player.maxJumpBalls}`;
+                
+                // Update controls info based on ball availability
+                document.getElementById('controls-info').innerText = 
+                    player.jumpBallCount > 0 
+                        ? "[A/D] Move &nbsp; [SPACE] Jump / Double Jump (Charge Used)"
+                        : "[A/D] Move &nbsp; [SPACE] Jump (Ball Required for Second Jump)";
+            }
+        }
+
+
+        // --- LEVEL GENERATION ---
+
+        let player;
+        let specter; 
+        let startGate, endGate;
+        let blocks = [];
+
+        function generateLevel(lvl) {
+            // APPLY THEME BEFORE CREATING ENTITIES
+            applyTheme(lvl); 
+
+            blocks = [];
+            worldWidth = screenWidth * CONFIG.worldMultiplier;
+            spawnedCollectible = null; // Reset spawned ball for the new level
+
+            const gapChanceThreshold = Math.max(0.4, 0.7 - lvl * 0.02);
+            const maxGapIncrease = Math.min(600, 200 + lvl * 50);
+
+            // 1. Start Gate & Player
+            startGate = new Gate(50, screenHeight - 170, false);
+            player = new Player(70, screenHeight - 200);
+            player.jumpBallCount = carriedJumpBallCount; // Load carried count
+            
+            // 2. Specter Spawn - Place it somewhere safe initially
+            specter = new Specter(worldWidth / 2, screenHeight - 150); 
+
+            // 3. Generate Floor & Gaps across WORLD width
+            let currentX = 0;
+            let potentialBallSpotX = 0;
+            let potentialBallSpotY = 0;
+            
+            // Start Platform (safe zone)
+            let safeZone = 300;
+            for(let bx = 0; bx < safeZone; bx += CONFIG.blockSize) {
+                blocks.push(new Block(bx, screenHeight - CONFIG.blockSize, 'static'));
+            }
+            currentX = safeZone;
+
+            while(currentX < worldWidth) {
+                // End Zone Protection
+                if (currentX > worldWidth - 400) {
+                    let startBlockX = Math.floor(currentX / CONFIG.blockSize) * CONFIG.blockSize;
+                    for(let bx = startBlockX; bx < worldWidth; bx += CONFIG.blockSize) {
+                         blocks.push(new Block(bx, screenHeight - CONFIG.blockSize, 'static'));
+                    }
+                    break;
+                }
+
+                if (Math.random() > gapChanceThreshold) {
+                    let gapSize = 100 + Math.random() * maxGapIncrease;
+                    let voidX = currentX;
+                    let voidW = gapSize;
+                    blocks.push(new VoidZone(voidX, screenHeight - CONFIG.blockSize, voidW, CONFIG.blockSize * 10)); 
+                    currentX += gapSize;
+                } else {
+                    let platWidth = 100 + Math.random() * 400;
+                    let startBlockX = Math.floor(currentX / CONFIG.blockSize) * CONFIG.blockSize;
+                    let endBlockX = Math.floor((currentX + platWidth) / CONFIG.blockSize) * CONFIG.blockSize;
+                    
+                    let platHeight = screenHeight - CONFIG.blockSize;
+                    if (Math.random() > 0.4) platHeight -= CONFIG.blockSize * Math.floor(Math.random() * 4);
+
+                    for(let bx = startBlockX; bx < endBlockX; bx += CONFIG.blockSize) {
+                         let newBlock = new Block(bx, platHeight, 'static');
+                         blocks.push(newBlock);
+                         // Set a potential spot for the jump ball
+                         if (Math.random() > 0.95 && newBlock.x > 500 && newBlock.x < worldWidth - 500) {
+                             potentialBallSpotX = newBlock.x + newBlock.w/2 - 7.5; // Center the 15px ball
+                             potentialBallSpotY = newBlock.y - newBlock.h - 10;
+                         }
+                    }
+                    currentX = endBlockX;
+                }
+            }
+
+            // 4. Obstacles / Movable Blocks
+            let movableCount = 4 + Math.floor(lvl * 0.8);
+            for(let i=0; i<movableCount; i++) {
+                blocks.push(new Block(300 + Math.random() * (worldWidth/2), screenHeight - 300 - (i*60), 'movable'));
+            }
+
+            // 5. Place Collectible
+            if (potentialBallSpotX > 0) {
+                spawnedCollectible = new Collectible(potentialBallSpotX, potentialBallSpotY);
+            } else {
+                // Fallback position if no good spot was found
+                spawnedCollectible = new Collectible(worldWidth * 0.5, screenHeight - 200);
+            }
+
+
+            // 6. End Gate
+            let floorBlocks = blocks.filter(b => b.type === 'static' && !(b instanceof VoidZone));
+            let lastBlock = floorBlocks.sort((a,b) => b.x - a.x)[0];
+            
+            if(lastBlock) {
+                endGate = new Gate(lastBlock.x, lastBlock.y - 120, true);
+            } else {
+                endGate = new Gate(worldWidth - 150, screenHeight - 170, true);
+            }
+
+            document.getElementById('level-indicator').innerText = "LEVEL " + lvl;
+            updateUI(); // Initial UI display
+        }
+
+        // Resets the current level without incrementing the level number (used on death)
+        function resetLevel() {
+            carriedJumpBallCount = 0; // Loss all balls on death
+            generateLevel(level);
+        }
+
+        // Completes the current challenge and loads a new challenge at the SAME level difficulty (used on gate entry)
+        function completeLevel() {
+            carriedJumpBallCount = player.jumpBallCount; // Carry over collected balls
+            level++;
+            generateLevel(level); 
+            // Explosion uses the NEW player color from the new level
+            createExplosion(player.x, player.y, CONFIG.colors.player, 50); 
+        }
+
+        // --- INPUT LISTENERS ---
+
+        window.addEventListener('keydown', e => {
+            if (e.key === 'a' || e.key === 'A') keys.a = true;
+            if (e.key === 'd' || e.key === 'D') keys.d = true;
+            if (e.key === ' ') {
+                if (!keys.spacePressed) {
+                    player.jump();
+                    keys.spacePressed = true;
+                }
+                keys.space = true;
+            }
+        });
+
+        window.addEventListener('keyup', e => {
+            if (e.key === 'a' || e.key === 'A') keys.a = false;
+            if (e.key === 'd' || e.key === 'D') keys.d = false;
+            if (e.key === ' ') {
+                keys.space = false;
+                keys.spacePressed = false;
+            }
+        });
+
+        canvas.addEventListener('mousedown', e => {
+            mouse.down = true;
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+            // Calculate world position based on camera
+            mouse.worldX = e.clientX + cameraX;
+
+            for(let block of blocks) {
+                if(block.type === 'movable' && 
+                   mouse.worldX > block.x && mouse.worldX < block.x + block.w &&
+                   mouse.y > block.y && mouse.y < block.y + block.h) {
+                    mouse.draggedBlock = block;
+                    block.isDragging = true;
+                    break;
+                }
+            }
+        });
+
+        window.addEventListener('mousemove', e => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+            mouse.worldX = e.clientX + cameraX;
+        });
+
+        window.addEventListener('mouseup', e => {
+            mouse.down = false;
+            if(mouse.draggedBlock) {
+                mouse.draggedBlock.isDragging = false;
+                mouse.draggedBlock = null;
+            }
+        });
+
+
+        // --- MAIN LOOP ---
+
+        function loop() {
+            // Camera Logic
+            let targetCamX = player.x - screenWidth / 2 + player.w / 2;
+            targetCamX = Math.max(0, Math.min(targetCamX, worldWidth - screenWidth));
+            cameraX += (targetCamX - cameraX) * 0.1;
+
+            // CLEAR
+            ctx.fillStyle = CONFIG.colors.bg;
+            ctx.fillRect(0, 0, screenWidth, screenHeight);
+
+            ctx.save();
+            ctx.translate(-cameraX, 0);
+
+            // --- DRAW WORLD ---
+
+            startGate.draw();
+            endGate.draw();
+
+            // Check if player is INSIDE the gate -> Complete current challenge
+            if (checkRectCollide(player, endGate)) {
+                completeLevel();
+            }
+
+            // Particles
+            for(let i=particles.length-1; i>=0; i--) {
+                let p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life -= 0.02;
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = p.life;
+                ctx.fillRect(p.x, p.y, 5, 5);
+                ctx.globalAlpha = 1;
+                if(p.life <= 0) particles.splice(i, 1);
+            }
+
+            // Collectible
+            if (spawnedCollectible) {
+                spawnedCollectible.update();
+                spawnedCollectible.draw();
+            }
+
+            // Blocks (including VoidZones)
+            blocks.forEach(b => {
+                b.update(blocks);
+                b.draw();
+            });
+
+            // Specter update and draw
+            specter.update();
+            specter.draw();
+
+            // Check collision between player and specter
+            if (checkRectCollide(player, specter)) {
+                createExplosion(player.x, player.y, CONFIG.colors.specter, 40);
+                resetLevel(); // Player dies if touched by specter
+            }
+
+
+            // Player
+            player.update(blocks);
+            player.draw(); // Now handles glow and line thickness based on inventory
+
+            ctx.restore();
+            requestAnimationFrame(loop);
+        }
+
+        generateLevel(level);
+        loop();
+
     </script>
+</body>
+</html>
+
 
 </body>
 </html>
