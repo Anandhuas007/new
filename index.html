@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Neon Puzzle Platformer</title>
     <style>
         body {
@@ -11,6 +11,8 @@
             background-color: #111;
             font-family: 'Courier New', Courier, monospace;
             user-select: none;
+            -webkit-user-select: none;
+            touch-action: none; /* Prevent browser handling of gestures */
         }
         #gameCanvas {
             display: block;
@@ -46,6 +48,62 @@
             font-weight: bold;
             z-index: 10;
         }
+
+        /* --- MOBILE CONTROLS --- */
+        #mobile-controls {
+            display: none; /* Hidden by default, shown via JS if touch detected or always on mobile */
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            width: 100%;
+            height: 120px;
+            pointer-events: none; /* Let clicks pass through empty areas */
+            z-index: 20;
+        }
+
+        .control-group {
+            pointer-events: auto;
+            position: absolute;
+            bottom: 10px;
+        }
+
+        #dpad {
+            left: 20px;
+            display: flex;
+            gap: 15px;
+        }
+
+        #actions {
+            right: 20px;
+        }
+
+        .btn {
+            width: 70px;
+            height: 70px;
+            background: rgba(255, 255, 255, 0.15);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            color: white;
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+            backdrop-filter: blur(2px);
+        }
+
+        .btn:active, .btn.pressed {
+            background: rgba(255, 255, 255, 0.4);
+            border-color: #fff;
+        }
+
+        /* Show controls on small screens automatically */
+        @media (max-width: 800px) {
+            #mobile-controls { display: block; }
+            #controls-info { display: none; } /* Hide keyboard info on mobile */
+        }
     </style>
 </head>
 <body>
@@ -54,9 +112,21 @@
         <h1>NEON SHIFT</h1>
         <p id="controls-info">[A/D] Move &nbsp; [SPACE] Jump</p>
         <p id="jump-ball-count">JUMPS: 0/5</p>
-        <p>[MOUSE] Drag Orange Blocks</p>
+        <p>[MOUSE/TOUCH] Drag Orange Blocks</p>
     </div>
     <div id="level-indicator">LEVEL 1</div>
+    
+    <!-- Mobile Controls Container -->
+    <div id="mobile-controls">
+        <div id="dpad" class="control-group">
+            <div class="btn" id="btn-left">←</div>
+            <div class="btn" id="btn-right">→</div>
+        </div>
+        <div id="actions" class="control-group">
+            <div class="btn" id="btn-jump">JUMP</div>
+        </div>
+    </div>
+
     <canvas id="gameCanvas"></canvas>
 
     <script>
@@ -586,6 +656,7 @@
                     `JUMPS: ${player.jumpBallCount}/${player.maxJumpBalls}`;
                 
                 // Update controls info based on ball availability
+                // Note: On mobile CSS hides this element so we can safely update it here
                 document.getElementById('controls-info').innerText = 
                     player.jumpBallCount > 0 
                         ? "[A/D] Move &nbsp; [SPACE] Jump / Double Jump (Charge Used)"
@@ -716,12 +787,12 @@
 
         // --- INPUT LISTENERS ---
 
+        // Keyboard support
         window.addEventListener('keydown', e => {
             if (gameState !== 'playing') return; // Ignore input if not playing
-
-            if (e.key === 'a' || e.key === 'A') keys.a = true;
-            if (e.key === 'd' || e.key === 'D') keys.d = true;
-            if (e.key === ' ') {
+            if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') keys.a = true;
+            if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') keys.d = true;
+            if (e.key === ' ' || e.key === 'ArrowUp') {
                 if (!keys.spacePressed) { 
                     player.jump();
                     keys.spacePressed = true;
@@ -731,22 +802,23 @@
         });
 
         window.addEventListener('keyup', e => {
-            if (e.key === 'a' || e.key === 'A') keys.a = false;
-            if (e.key === 'd' || e.key === 'D') keys.d = false;
-            if (e.key === ' ') {
+            if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') keys.a = false;
+            if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') keys.d = false;
+            if (e.key === ' ' || e.key === 'ArrowUp') {
                 keys.space = false;
                 keys.spacePressed = false;
             }
         });
 
-        canvas.addEventListener('mousedown', e => {
-            if (gameState !== 'playing') return;
+        // --- MOUSE & TOUCH SUPPORT FOR BLOCKS ---
+
+        function handleStart(x, y) {
+             if (gameState !== 'playing') return;
             
             mouse.down = true;
-            mouse.x = e.clientX;
-            mouse.y = e.clientY;
-            // Calculate world position based on camera
-            mouse.worldX = e.clientX + cameraX;
+            mouse.x = x;
+            mouse.y = y;
+            mouse.worldX = x + cameraX;
 
             for(let block of blocks) {
                 if(block.type === 'movable' && 
@@ -757,21 +829,75 @@
                     break;
                 }
             }
-        });
+        }
 
-        window.addEventListener('mousemove', e => {
-            mouse.x = e.clientX;
-            mouse.y = e.clientY;
-            mouse.worldX = e.clientX + cameraX;
-        });
+        function handleMove(x, y) {
+            mouse.x = x;
+            mouse.y = y;
+            mouse.worldX = x + cameraX;
+        }
 
-        window.addEventListener('mouseup', e => {
+        function handleEnd() {
             mouse.down = false;
             if(mouse.draggedBlock) {
                 mouse.draggedBlock.isDragging = false;
                 mouse.draggedBlock = null;
             }
-        });
+        }
+
+        // Mouse Events
+        canvas.addEventListener('mousedown', e => handleStart(e.clientX, e.clientY));
+        window.addEventListener('mousemove', e => handleMove(e.clientX, e.clientY));
+        window.addEventListener('mouseup', e => handleEnd());
+
+        // Touch Events (Canvas - for dragging blocks)
+        canvas.addEventListener('touchstart', e => {
+            e.preventDefault(); // Prevent scrolling
+            const touch = e.touches[0];
+            handleStart(touch.clientX, touch.clientY);
+        }, { passive: false });
+
+        canvas.addEventListener('touchmove', e => {
+            e.preventDefault(); 
+            const touch = e.touches[0];
+            handleMove(touch.clientX, touch.clientY);
+        }, { passive: false });
+
+        window.addEventListener('touchend', e => handleEnd());
+
+
+        // --- VIRTUAL CONTROLS (MOBILE) ---
+        
+        const btnLeft = document.getElementById('btn-left');
+        const btnRight = document.getElementById('btn-right');
+        const btnJump = document.getElementById('btn-jump');
+
+        function setupTouchBtn(btn, keyProp) {
+            btn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                btn.classList.add('pressed');
+                keys[keyProp] = true;
+                if (keyProp === 'space') {
+                    if (!keys.spacePressed) {
+                        player.jump();
+                        keys.spacePressed = true;
+                    }
+                }
+            }, { passive: false });
+
+            btn.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                btn.classList.remove('pressed');
+                keys[keyProp] = false;
+                if (keyProp === 'space') {
+                    keys.spacePressed = false;
+                }
+            });
+        }
+
+        setupTouchBtn(btnLeft, 'a');
+        setupTouchBtn(btnRight, 'd');
+        setupTouchBtn(btnJump, 'space');
 
 
         // --- MAIN LOOP ---
